@@ -1,0 +1,482 @@
+MPASM  5.31                      ASCENSOR.ASM   10-28-2017  1:52:34         PAGE  1
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+                      00001 #INCLUDE <P16F628A.INC>
+                      00001         LIST
+                      00002 ; P16F628A.INC  Standard Header File, Version 1.10    Microchip Technology, Inc.
+                      00265         LIST
+                      00266 
+                      00002 
+Warning[205]: Found directive in column 1. (__CONFIG)
+2007   3F10           00003 __CONFIG 3F10
+                      00004 
+                      00005 
+                      00006 ;VARIABLES
+                      00007 
+  00000020            00008 CONT_1  EQU 0X20
+  00000021            00009 CONT_2  EQU 0X21
+  00000022            00010 AUX             EQU 0X22        ;USADO PARA ESTADO DEL MOTOR Y COMO BANDERA DE
+                      00011                                         ;PISO DE DESTINO (6: PB ; 7: 2DO PISO)
+  00000006            00012 PB_F    EQU 6
+  00000007            00013 SGDO_F  EQU 7
+                      00014 
+  00000003            00015 SNSR_PRTA       EQU 3           ;RB0: PUERTA DE CABINA (1 = ABIERTA)
+  00000001            00016 MOTOR           EQU 1           ;RB1: PRENDIDO DEL MOTOR (0 = PRENDIDO)
+  00000002            00017 DIREC           EQU 2           ;RB2: DIRECCION DE GIRO (0 = SUBE)      
+  00000004            00018 BTN_PB          EQU     4               ;BOTONERA: RB4: BOTON A PB
+  00000005            00019 BTN_1ERO        EQU     5               ;                  RB5: BOTON A 1ERO
+  00000006            00020 BTN_2DO         EQU     6               ;                  RB6: BOTON A 2DO
+                      00021 ;SNSR_PB                EQU     0               ;RA0: FIN DE CARRERA EN PB
+  00000000            00022 POS_PB          EQU     0               ;POSICION EN LA CABINA: RA0: PB
+  00000001            00023 POS_1ERO        EQU     1               ;                                               RA1: 1ERO
+  00000002            00024 POS_2DO         EQU     2               ;                                               RA2: 2DO
+                      00025 
+                      00026 
+0000                  00027                 ORG 0X00
+0000   2804           00028                 GOTO INICIO
+0004                  00029                 ORG 0X04
+                      00030                                 
+                      00031 
+0004                  00032 INICIO  
+                      00033                 
+                      00034 ;SETEO
+                      00035 
+0004   1683           00036         BSF STATUS, RP0                 
+0005   300F           00037         MOVLW 0X0F                      ;PONGO RA0 A RA3 EN ENTRADA             
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0006   0085           00038         MOVWF TRISA     
+0007   3071           00039         MOVLW 0X71                      ;PONGO RB0 Y DE RB4 A RA6 EN ENTRADA
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0008   0086           00040         MOVWF TRISB
+0009   1283           00041         BCF STATUS, RP0
+                      00042 
+000A   3007           00043         MOVLW 0X07
+000B   009F           00044         MOVWF CMCON
+                      00045         
+000C   0185           00046         CLRF PORTA
+MPASM  5.31                      ASCENSOR.ASM   10-28-2017  1:52:34         PAGE  2
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+000D   1605           00047         BSF PORTA, 4
+000E   0186           00048         CLRF PORTB
+000F   1486           00049         BSF PORTB, MOTOR 
+0010   01A2           00050         CLRF AUX
+                      00051         
+                      00052 
+                      00053 ;HACIA PB
+                      00054 
+                      00055         
+0011   1985           00056         BTFSC PORTA, SNSR_PRTA
+0012   201D           00057                 CALL PARADA
+0013   202B           00058         CALL INICIAL_PB
+                      00059 
+0014                  00060 PROGRAMA
+                      00061         
+0014   1985           00062         BTFSC PORTA, SNSR_PRTA
+0015   201D           00063                 CALL PARADA
+                      00064 
+0016   1A06           00065         BTFSC PORTB, BTN_PB
+0017   2026           00066                 CALL HACIA_PB                   ;PREGUNTO SISTEMATICAMENTE POR LOS PULSADORES.
+                      00067 
+0018   1A86           00068         BTFSC PORTB, BTN_1ERO
+0019   2036           00069                 CALL HACIA_1ERO
+                      00070 
+001A   1B06           00071         BTFSC PORTB, BTN_2DO
+001B   2048           00072                 CALL HACIA_2DO
+                      00073 
+001C   2814           00074         GOTO PROGRAMA
+                      00075         
+                      00076 
+001D                  00077 PARADA
+001D   2063           00078         CALL DEMORA_20ms                ;HAGO UNA DEMORA PREVISORIA
+                      00079         
+001E   1886           00080         BTFSC PORTB, MOTOR
+001F   1422           00081                 BSF AUX, 0                      ;GUARDO ESTADO DEL MOTOR
+                      00082 
+0020   1486           00083         BSF PORTB, MOTOR
+0021   1985           00084         BTFSC PORTA, SNSR_PRTA
+0022   2821           00085                 GOTO $-.1                       ;BUCLE QUE APAGA EL MOTOR DE ESTAR ABIERTA LA PUERTA
+                      00086                                                         ;(RB0 = 1) Y REANUDA EL MOTOR SI ES NECESARIO.
+0023   1C22           00087         BTFSS AUX, 0
+0024   1086           00088                 BCF PORTB, MOTOR                ;RESTAURO ESTADO DEL MOTOR
+0025   0008           00089         RETURN
+                      00090         
+                      00091         
+0026                  00092 HACIA_PB
+0026   2063           00093         CALL DEMORA_20ms                ;HAGO UNA DEMORA PREVISORIA
+0027   1E06           00094         BTFSS PORTB, BTN_PB             ;SALGO SI FUE POR UN REBOTE INDESEADO
+0028   0008           00095                 RETURN                          
+0029   1805           00096         BTFSC PORTA, POS_PB             ;SALGO SI EL CARRO ESTA EN EL PISO QUE SE TOCO.
+002A   0008           00097                 RETURN
+                      00098 
+Warning[207]: Found label after column 1. (INICIAL_PB)
+MPASM  5.31                      ASCENSOR.ASM   10-28-2017  1:52:34         PAGE  3
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+002B                  00099         INICIAL_PB                              ;COMIENZO DE LA RUTINA DE POSICION INICIAL (SOLO LA PRIM
+                            ER VEZ)
+                      00100 
+002B   1722           00101         BSF AUX, PB_F                   ;ACTIVO BANDERA PERSONALIZADA
+002C   13A2           00102         BCF AUX, SGDO_F
+                      00103                 
+002D   2058           00104         CALL DIRECCION                  ;LLAMO A SUBRUTINA QUE ESTABLECE LA DIRECCION
+                      00105 
+002E   1985           00106         BTFSC PORTA, SNSR_PRTA  ;PREGUNTO SI SE ABRE LA PUERTA EN EL TRAYECTO
+002F   201D           00107                 CALL PARADA
+0030   1C05           00108         BTFSS PORTA, POS_PB
+0031   282E           00109                 GOTO $-.3                       ;PREGUNTO SI LLEGO.
+                      00110 
+0032   1486           00111         BSF PORTB, MOTOR                ;APAGO EL MOTOR
+                      00112 
+                      00113         ;CARGO CABINA?
+                      00114         
+0033   1322           00115         BCF AUX, PB_F                   ;LIMPIO BANDERA
+0034   13A2           00116         BCF AUX, SGDO_F
+                      00117 
+0035   0008           00118         RETURN
+                      00119 
+0036                  00120 HACIA_1ERO
+0036   2063           00121         CALL DEMORA_20ms                ;HAGO UNA DEMORA PREVISORIA
+0037   1E86           00122         BTFSS PORTB, BTN_1ERO   ;SALGO SI FUE POR UN REBOTE INDESEADO
+0038   0008           00123                 RETURN                          
+0039   1885           00124         BTFSC PORTA, POS_1ERO   ;SALGO SI EL CARRO ESTA EN EL PISO QUE SE TOCO.
+003A   0008           00125                 RETURN
+                      00126         
+003B   1805           00127         BTFSC PORTA, POS_PB
+003C   17A2           00128                 BSF AUX, SGDO_F
+003D   1905           00129         BTFSC PORTA, POS_2DO
+003E   1722           00130                 BSF AUX, PB_F
+                      00131                 
+003F   2058           00132         CALL DIRECCION                  ;LLAMO A SUBRUTINA QUE ESTABLECE LA DIRECCION
+                      00133 
+0040   1985           00134         BTFSC PORTA, SNSR_PRTA  ;PREGUNTO SI SE ABRE LA PUERTA EN EL TRAYECTO
+0041   201D           00135                 CALL PARADA
+0042   1C85           00136         BTFSS PORTA, POS_1ERO
+0043   2840           00137                 GOTO $-.3                       ;PREGUNTO SI LLEGO.
+                      00138 
+0044   1486           00139         BSF PORTB, MOTOR                ;APAGO EL MOTOR
+                      00140 
+                      00141         ;CARGO CABINA?
+                      00142         
+0045   1322           00143         BCF AUX, PB_F
+0046   13A2           00144         BCF AUX, SGDO_F
+                      00145 
+0047   0008           00146         RETURN
+                      00147 
+0048                  00148 HACIA_2DO
+0048   2063           00149         CALL DEMORA_20ms                ;HAGO UNA DEMORA PREVISORIA
+0049   1F06           00150         BTFSS PORTB, BTN_2DO    ;SALGO SI FUE POR UN REBOTE INDESEADO
+MPASM  5.31                      ASCENSOR.ASM   10-28-2017  1:52:34         PAGE  4
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+004A   0008           00151                 RETURN                          
+004B   1905           00152         BTFSC PORTA, POS_2DO    ;SALGO SI EL CARRO ESTA EN EL PISO QUE SE TOCO.
+004C   0008           00153                 RETURN
+                      00154         
+004D   1322           00155         BCF AUX, PB_F
+004E   17A2           00156         BSF AUX, SGDO_F
+                      00157         
+004F   2058           00158         CALL DIRECCION                  ;LLAMO A SUBRUTINA QUE ESTABLECE LA DIRECCION
+                      00159 
+0050   1985           00160         BTFSC PORTA, SNSR_PRTA  ;PREGUNTO SI SE ABRE LA PUERTA EN EL TRAYECTO
+0051   201D           00161                 CALL PARADA
+0052   1D05           00162         BTFSS PORTA, POS_2DO
+0053   2850           00163                 GOTO $-.3                       ;PREGUNTO SI LLEGO.
+                      00164 
+0054   1486           00165         BSF PORTB, MOTOR                ;APAGO EL MOTOR
+                      00166 
+                      00167         ;CARGO CABINA?
+                      00168         
+0055   1322           00169         BCF AUX, PB_F
+0056   13A2           00170         BCF AUX, SGDO_F
+                      00171         
+0057   0008           00172         RETURN
+                      00173 
+                      00174 
+0058                  00175 DIRECCION
+0058   1486           00176         BSF PORTB, MOTOR
+                      00177                 
+0059   1805           00178         BTFSC PORTA, POS_PB                     ;SI ESTA EN PB SOLO PUEDE SUBIR
+005A   1106           00179                 BCF PORTB, DIREC
+005B   1905           00180         BTFSC PORTA, POS_2DO
+005C   1506           00181                 BSF PORTB, DIREC                ;SI ESTA EN EL 2DO SOLO PUEDE BAJAR
+                      00182                 
+                      00183                                                                 ;SI EL CARRITO ESTA EN EL 1ERO Y SE TOCA
+                             EL 
+005D   1B22           00184         BTFSC AUX, PB_F                         ;BOTON DE PB AVANZA HACIA ABAJO, DE LO 
+005E   1506           00185                 BSF PORTB, DIREC                ;CONTRARIO, SUBE.
+005F   1BA2           00186         BTFSC AUX, SGDO_F                                
+0060   1106           00187                 BCF PORTB, DIREC
+                      00188                 
+0061   1086           00189         BCF PORTB, MOTOR                        ;ARRANCO EL MOTOR
+                      00190         
+0062   0008           00191         RETURN
+                      00192 
+                      00193 
+                      00194 
+0063                  00195 DEMORA_20ms
+0063   3014           00196                         MOVLW D'20'
+0064   00A1           00197                         MOVWF CONT_2
+Warning[207]: Found label after column 1. (BUCLE)
+0065   30FA           00198         BUCLE   MOVLW D'250'
+0066   00A0           00199                         MOVWF CONT_1
+                      00200                         
+0067   0000           00201                         NOP
+MPASM  5.31                      ASCENSOR.ASM   10-28-2017  1:52:34         PAGE  5
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+0068   0BA0           00202                         DECFSZ CONT_1,1
+0069   2867           00203                                 GOTO $-.2
+006A   1103           00204                         BCF STATUS, Z
+006B   0BA1           00205                         DECFSZ CONT_2,1
+006C   2865           00206                                 GOTO BUCLE
+006D   0008           00207                         RETURN
+                      00208 
+                      00209 
+Warning[205]: Found directive in column 1. (END)
+                      00210 END
+MPASM  5.31                      ASCENSOR.ASM   10-28-2017  1:52:34         PAGE  6
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+ADEN                              00000003
+AUX                               00000022
+BRGH                              00000002
+BTN_1ERO                          00000005
+BTN_2DO                           00000006
+BTN_PB                            00000004
+BUCLE                             00000065
+C                                 00000000
+C1INV                             00000004
+C1OUT                             00000006
+C2INV                             00000005
+C2OUT                             00000007
+CCP1CON                           00000017
+CCP1IE                            00000002
+CCP1IF                            00000002
+CCP1M0                            00000000
+CCP1M1                            00000001
+CCP1M2                            00000002
+CCP1M3                            00000003
+CCP1X                             00000005
+CCP1Y                             00000004
+CCPR1H                            00000016
+CCPR1L                            00000015
+CIS                               00000003
+CM0                               00000000
+CM1                               00000001
+CM2                               00000002
+CMCON                             0000001F
+CMIE                              00000006
+CMIF                              00000006
+CONT_1                            00000020
+CONT_2                            00000021
+CREN                              00000004
+CSRC                              00000007
+DC                                00000001
+DEMORA_20ms                       00000063
+DIREC                             00000002
+DIRECCION                         00000058
+EEADR                             0000009B
+EECON1                            0000009C
+EECON2                            0000009D
+EEDATA                            0000009A
+EEIE                              00000007
+EEIF                              00000007
+F                                 00000001
+FERR                              00000002
+FSR                               00000004
+GIE                               00000007
+HACIA_1ERO                        00000036
+HACIA_2DO                         00000048
+HACIA_PB                          00000026
+INDF                              00000000
+INICIAL_PB                        0000002B
+MPASM  5.31                      ASCENSOR.ASM   10-28-2017  1:52:34         PAGE  7
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+INICIO                            00000004
+INTCON                            0000000B
+INTE                              00000004
+INTEDG                            00000006
+INTF                              00000001
+IRP                               00000007
+MOTOR                             00000001
+NOT_BO                            00000000
+NOT_BOD                           00000000
+NOT_BOR                           00000000
+NOT_PD                            00000003
+NOT_POR                           00000001
+NOT_RBPU                          00000007
+NOT_T1SYNC                        00000002
+NOT_TO                            00000004
+OERR                              00000001
+OPTION_REG                        00000081
+OSCF                              00000003
+PARADA                            0000001D
+PB_F                              00000006
+PCL                               00000002
+PCLATH                            0000000A
+PCON                              0000008E
+PEIE                              00000006
+PIE1                              0000008C
+PIR1                              0000000C
+PORTA                             00000005
+PORTB                             00000006
+POS_1ERO                          00000001
+POS_2DO                           00000002
+POS_PB                            00000000
+PR2                               00000092
+PROGRAMA                          00000014
+PS0                               00000000
+PS1                               00000001
+PS2                               00000002
+PSA                               00000003
+RBIE                              00000003
+RBIF                              00000000
+RCIE                              00000005
+RCIF                              00000005
+RCREG                             0000001A
+RCSTA                             00000018
+RD                                00000000
+RP0                               00000005
+RP1                               00000006
+RX9                               00000006
+RX9D                              00000000
+SGDO_F                            00000007
+SNSR_PRTA                         00000003
+SPBRG                             00000099
+SPEN                              00000007
+SREN                              00000005
+MPASM  5.31                      ASCENSOR.ASM   10-28-2017  1:52:34         PAGE  8
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+STATUS                            00000003
+SYNC                              00000004
+T0CS                              00000005
+T0IE                              00000005
+T0IF                              00000002
+T0SE                              00000004
+T1CKPS0                           00000004
+T1CKPS1                           00000005
+T1CON                             00000010
+T1OSCEN                           00000003
+T2CKPS0                           00000000
+T2CKPS1                           00000001
+T2CON                             00000012
+TMR0                              00000001
+TMR1CS                            00000001
+TMR1H                             0000000F
+TMR1IE                            00000000
+TMR1IF                            00000000
+TMR1L                             0000000E
+TMR1ON                            00000000
+TMR2                              00000011
+TMR2IE                            00000001
+TMR2IF                            00000001
+TMR2ON                            00000002
+TOUTPS0                           00000003
+TOUTPS1                           00000004
+TOUTPS2                           00000005
+TOUTPS3                           00000006
+TRISA                             00000085
+TRISB                             00000086
+TRMT                              00000001
+TX9                               00000006
+TX9D                              00000000
+TXEN                              00000005
+TXIE                              00000004
+TXIF                              00000004
+TXREG                             00000019
+TXSTA                             00000098
+VR0                               00000000
+VR1                               00000001
+VR2                               00000002
+VR3                               00000003
+VRCON                             0000009F
+VREN                              00000007
+VROE                              00000006
+VRR                               00000005
+W                                 00000000
+WR                                00000001
+WREN                              00000002
+WRERR                             00000003
+Z                                 00000002
+_BODEN_OFF                        00003FBF
+_BODEN_ON                         00003FFF
+MPASM  5.31                      ASCENSOR.ASM   10-28-2017  1:52:34         PAGE  9
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+_BOREN_OFF                        00003FBF
+_BOREN_ON                         00003FFF
+_CP_OFF                           00003FFF
+_CP_ON                            00001FFF
+_DATA_CP_OFF                      00003FFF
+_DATA_CP_ON                       00003EFF
+_ER_OSC_CLKOUT                    00003FFF
+_ER_OSC_NOCLKOUT                  00003FFE
+_EXTCLK_OSC                       00003FEF
+_HS_OSC                           00003FEE
+_INTOSC_OSC_CLKOUT                00003FFD
+_INTOSC_OSC_NOCLKOUT              00003FFC
+_INTRC_OSC_CLKOUT                 00003FFD
+_INTRC_OSC_NOCLKOUT               00003FFC
+_LP_OSC                           00003FEC
+_LVP_OFF                          00003F7F
+_LVP_ON                           00003FFF
+_MCLRE_OFF                        00003FDF
+_MCLRE_ON                         00003FFF
+_PWRTE_OFF                        00003FFF
+_PWRTE_ON                         00003FF7
+_RC_OSC_CLKOUT                    00003FFF
+_RC_OSC_NOCLKOUT                  00003FFE
+_WDT_OFF                          00003FFB
+_WDT_ON                           00003FFF
+_XT_OSC                           00003FED
+__16F628A                         00000001
+__DEBUG                           1
+
+
+MEMORY USAGE MAP ('X' = Used,  '-' = Unused)
+
+0000 : X---XXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX
+0040 : XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXX-- ----------------
+2000 : -------X-------- ---------------- ---------------- ----------------
+
+All other memory blocks unused.
+
+Program Memory Words Used:   107
+Program Memory Words Free:  1941
+
+
+Errors   :     0
+Warnings :     4 reported,     0 suppressed
+Messages :     2 reported,     0 suppressed
+
+
